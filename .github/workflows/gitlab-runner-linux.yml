@@ -37,7 +37,7 @@ jobs:
 
           sudo apt-get update
           sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-            openssh-server xfce4 xfce4-goodies dbus-x11 tigervnc-standalone-server
+            openssh-server xfce4 xfce4-goodies dbus-x11 tigervnc-standalone-server tigervnc-tools
 
           if ! id "${RUNNER_USERNAME}" >/dev/null 2>&1; then
             sudo useradd -m -s /bin/bash "${RUNNER_USERNAME}"
@@ -51,7 +51,7 @@ jobs:
           sudo systemctl restart ssh || sudo service ssh restart
 
           sudo -u "${RUNNER_USERNAME}" mkdir -p "/home/${RUNNER_USERNAME}/.vnc"
-          printf '%s\n%s\nn\n' "${RUNNER_PASSWORD}" "${RUNNER_PASSWORD}" | sudo -u "${RUNNER_USERNAME}" tigervncpasswd >/dev/null
+          printf '%s\n%s\nn\n' "${RUNNER_PASSWORD}" "${RUNNER_PASSWORD}" | sudo -u "${RUNNER_USERNAME}" vncpasswd >/dev/null
           sudo -u "${RUNNER_USERNAME}" tee "/home/${RUNNER_USERNAME}/.vnc/xstartup" >/dev/null <<'EOF'
           #!/bin/sh
           unset SESSION_MANAGER
