@@ -56,23 +56,13 @@ jobs:
             throw "GitLab Runner registration failed with exit code $LASTEXITCODE"
           }
 
-          $process = Start-Process $runner -ArgumentList @(
-            'run',
-            '--config', $env:RUNNER_CONFIG,
-            '--working-directory', "$env:RUNNER_DIR\work"
-          ) -PassThru -WindowStyle Hidden
-
           try {
             Write-Host "GitLab Windows runner active: gh-win-$env:GITHUB_RUN_ID"
             Write-Host "Tags: $env:RUNNER_TAGS"
-            while (-not $process.HasExited) {
-              Write-Host "[$(Get-Date -Format o)] windows runner alive"
-              Start-Sleep -Seconds 300
+            & $runner run --config $env:RUNNER_CONFIG --working-directory "$env:RUNNER_DIR\work"
+            if ($LASTEXITCODE -ne 0) {
+              throw "GitLab Runner exited with code $LASTEXITCODE"
             }
-            exit $process.ExitCode
           } finally {
-            if (-not $process.HasExited) {
-              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
-            }
             & $runner unregister --config $env:RUNNER_CONFIG --all-runners
           }
