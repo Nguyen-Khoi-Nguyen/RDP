@@ -26,7 +26,7 @@ jobs:
           tags: tag:github-runner
           hostname: gh-mac-${{ github.run_id }}
 
-      - name: Configure SSH and VNC
+      - name: Configure SSH and X11 VNC
         run: |
           set -euo pipefail
           if [ -z "${RUNNER_PASSWORD}" ]; then
@@ -46,21 +46,63 @@ jobs:
 
           caffeinate -dimsu >/tmp/github-runner-caffeinate.log 2>&1 &
           sudo systemsetup -setremotelogin on
-          sudo defaults write /Library/Preferences/com.apple.RemoteManagement ScreenSharingReqPermEnabled -bool false
-          printf '%s\n' "${RUNNER_PASSWORD}" | perl -we 'BEGIN { @k = unpack "C*", pack "H*", "1734516E8BA8C5E2FF1C39567390ADCA" }; $_ = <>; chomp; s/^(.{8}).*/$1/; @p = unpack "C*", $_; foreach (@k) { printf "%02X", $_ ^ (shift @p || 0) }; print "\n"' | sudo tee /Library/Preferences/com.apple.VNCSettings.txt >/dev/null
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -deactivate \
             -stop || true
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -activate \
-            -configure -allowAccessFor -allUsers \
-            -privs -all
-          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
-            -configure -clientopts -setreqperm -reqperm no \
-            -configure -clientopts -setvnclegacy -vnclegacy yes \
-            -restart -agent -console
-          sudo launchctl enable system/com.apple.screensharing || true
-          sudo launchctl kickstart -k system/com.apple.screensharing || true
+          sudo launchctl bootout system/com.apple.screensharing || true
+
+          export HOMEBREW_NO_AUTO_UPDATE=1
+          export HOMEBREW_NO_INSTALL_CLEANUP=1
+          export HOMEBREW_NO_ENV_HINTS=1
+          brew install --cask xquartz
+          brew install autoconf automake pkgconf libvncserver openssl@3
+
+          build_root="$(mktemp -d)"
+          brew unpack x11vnc --destdir="$build_root"
+          x11vnc_src="$(find "$build_root" -mindepth 1 -maxdepth 1 -type d -name 'x11vnc-*' | head -1)"
+          if [ -z "$x11vnc_src" ]; then
+            echo "::error::Failed to unpack x11vnc source"
+            exit 1
+          fi
+
+          openssl_prefix="$(brew --prefix openssl@3)"
+          libvncserver_prefix="$(brew --prefix libvncserver)"
+          x11vnc_prefix="/tmp/x11vnc-x"
+          rm -rf "$x11vnc_prefix"
+          (
+            cd "$x11vnc_src"
+            ./autogen.sh
+            export PKG_CONFIG_PATH="/opt/X11/lib/pkgconfig:${libvncserver_prefix}/lib/pkgconfig:${openssl_prefix}/lib/pkgconfig"
+            export CPPFLAGS="-I/opt/X11/include -I${openssl_prefix}/include"
+            export LDFLAGS="-L/opt/X11/lib -L${openssl_prefix}/lib"
+            export CFLAGS="-std=gnu17 -Wno-implicit-function-declaration -Wno-int-conversion"
+            export LIBS="-L${openssl_prefix}/lib -lssl -lcrypto"
+            ./configure --prefix="$x11vnc_prefix" --with-x --with-ssl="$openssl_prefix"
+            make -j"$(sysctl -n hw.ncpu)"
+            make install
+          )
+
+          export PATH="/opt/X11/bin:${PATH}"
+          pkill -f "x11vnc.*5900" >/dev/null 2>&1 || true
+          pkill -f "Xvfb :1" >/dev/null 2>&1 || true
+          rm -f /tmp/.X1-lock /tmp/.X11-unix/X1
+          nohup Xvfb :1 -screen 0 1440x900x24 -ac +extension RANDR >/tmp/xvfb-1.log 2>&1 &
+          sleep 2
+          DISPLAY=:1 nohup twm >/tmp/twm-1.log 2>&1 &
+          DISPLAY=:1 nohup xterm -geometry 100x30+60+60 -title macOS-X11-VNC >/tmp/xterm-1.log 2>&1 &
+          nohup "$x11vnc_prefix/bin/x11vnc" \
+            -display :1 \
+            -rfbport 5900 \
+            -listen 0.0.0.0 \
+            -passwd "$RUNNER_PASSWORD" \
+            -forever \
+            -shared \
+            -noxdamage \
+            -repeat \
+            >/tmp/x11vnc-5900.log 2>&1 &
+          sleep 4
+          lsof -nP -iTCP:5900 -sTCP:LISTEN
+          "$x11vnc_prefix/bin/x11vnc" -version
 
       - name: Install GitLab Runner
         run: |
