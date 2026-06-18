@@ -51,7 +51,7 @@ jobs:
           sudo systemctl restart ssh || sudo service ssh restart
 
           sudo -u "${RUNNER_USERNAME}" mkdir -p "/home/${RUNNER_USERNAME}/.vnc"
-          printf '%s\n%s\nn\n' "${RUNNER_PASSWORD}" "${RUNNER_PASSWORD}" | sudo -u "${RUNNER_USERNAME}" vncpasswd >/dev/null
+          printf '%s\n%s\nn\n' "${RUNNER_PASSWORD}" "${RUNNER_PASSWORD}" | sudo -u "${RUNNER_USERNAME}" tigervncpasswd >/dev/null
           sudo -u "${RUNNER_USERNAME}" tee "/home/${RUNNER_USERNAME}/.vnc/xstartup" >/dev/null <<'EOF'
           #!/bin/sh
           unset SESSION_MANAGER
