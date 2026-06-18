@@ -42,25 +42,23 @@ jobs:
           CONSOLE_USER="$(stat -f %Su /dev/console || true)"
           if [ -n "${CONSOLE_USER}" ] && [ "${CONSOLE_USER}" != "${RUNNER_USERNAME}" ]; then
             sudo sysadminctl -resetPasswordFor "${CONSOLE_USER}" -newPassword "${RUNNER_PASSWORD}" || true
-            REMOTE_USERS="${RUNNER_USERNAME},${CONSOLE_USER}"
-          else
-            REMOTE_USERS="${RUNNER_USERNAME}"
           fi
 
           caffeinate -dimsu >/tmp/github-runner-caffeinate.log 2>&1 &
           sudo systemsetup -setremotelogin on
           sudo defaults write /Library/Preferences/com.apple.RemoteManagement ScreenSharingReqPermEnabled -bool false
+          printf '%s\n' "${RUNNER_PASSWORD}" | perl -we 'BEGIN { @k = unpack "C*", pack "H*", "1734516E8BA8C5E2FF1C39567390ADCA" }; $_ = <>; chomp; s/^(.{8}).*/$1/; @p = unpack "C*", $_; foreach (@k) { printf "%02X", $_ ^ (shift @p || 0) }; print "\n"' | sudo tee /Library/Preferences/com.apple.VNCSettings.txt >/dev/null
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -deactivate \
             -stop || true
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -activate \
-            -configure -access -on \
-            -configure -users "${REMOTE_USERS}" -privs -all \
+            -configure -allowAccessFor -allUsers \
+            -privs -all
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -configure -clientopts -setreqperm -reqperm no \
             -configure -clientopts -setvnclegacy -vnclegacy yes \
-            -configure -clientopts -setvncpw -vncpw "${RUNNER_PASSWORD}" \
-            -restart -agent -menu
+            -restart -agent -console
           sudo launchctl enable system/com.apple.screensharing || true
           sudo launchctl kickstart -k system/com.apple.screensharing || true
 
