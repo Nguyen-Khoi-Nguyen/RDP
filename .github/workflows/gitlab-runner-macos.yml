@@ -39,6 +39,13 @@ jobs:
           else
             sudo sysadminctl -resetPasswordFor "${RUNNER_USERNAME}" -newPassword "${RUNNER_PASSWORD}"
           fi
+          CONSOLE_USER="$(stat -f %Su /dev/console || true)"
+          if [ -n "${CONSOLE_USER}" ] && [ "${CONSOLE_USER}" != "${RUNNER_USERNAME}" ]; then
+            sudo sysadminctl -resetPasswordFor "${CONSOLE_USER}" -newPassword "${RUNNER_PASSWORD}" || true
+            REMOTE_USERS="${RUNNER_USERNAME},${CONSOLE_USER}"
+          else
+            REMOTE_USERS="${RUNNER_USERNAME}"
+          fi
 
           caffeinate -dimsu >/tmp/github-runner-caffeinate.log 2>&1 &
           sudo systemsetup -setremotelogin on
@@ -49,7 +56,7 @@ jobs:
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -activate \
             -configure -access -on \
-            -configure -users "${RUNNER_USERNAME}" -privs -all \
+            -configure -users "${REMOTE_USERS}" -privs -all \
             -configure -clientopts -setreqperm -reqperm no \
             -configure -clientopts -setvnclegacy -vnclegacy yes \
             -configure -clientopts -setvncpw -vncpw "${RUNNER_PASSWORD}" \
