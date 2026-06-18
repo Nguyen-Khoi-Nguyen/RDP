@@ -40,14 +40,22 @@ jobs:
             sudo sysadminctl -resetPasswordFor "${RUNNER_USERNAME}" -newPassword "${RUNNER_PASSWORD}"
           fi
 
+          caffeinate -dimsu >/tmp/github-runner-caffeinate.log 2>&1 &
           sudo systemsetup -setremotelogin on
+          sudo defaults write /Library/Preferences/com.apple.RemoteManagement ScreenSharingReqPermEnabled -bool false
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -deactivate \
+            -stop || true
           sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
             -activate \
             -configure -access -on \
             -configure -users "${RUNNER_USERNAME}" -privs -all \
+            -configure -clientopts -setreqperm -reqperm no \
             -configure -clientopts -setvnclegacy -vnclegacy yes \
             -configure -clientopts -setvncpw -vncpw "${RUNNER_PASSWORD}" \
             -restart -agent -menu
+          sudo launchctl enable system/com.apple.screensharing || true
+          sudo launchctl kickstart -k system/com.apple.screensharing || true
 
       - name: Install GitLab Runner
         run: |

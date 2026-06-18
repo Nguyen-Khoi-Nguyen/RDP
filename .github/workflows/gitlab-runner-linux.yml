@@ -56,11 +56,16 @@ jobs:
           #!/bin/sh
           unset SESSION_MANAGER
           unset DBUS_SESSION_BUS_ADDRESS
-          exec startxfce4
+          export DESKTOP_SESSION=xfce
+          export XDG_CURRENT_DESKTOP=XFCE
+          export XDG_SESSION_DESKTOP=xfce
+          export XDG_CONFIG_DIRS=/etc/xdg
+          export XDG_DATA_DIRS=/usr/local/share:/usr/share
+          exec dbus-launch --exit-with-session startxfce4
           EOF
           sudo chmod +x "/home/${RUNNER_USERNAME}/.vnc/xstartup"
-          sudo -u "${RUNNER_USERNAME}" bash -lc 'cd ~ && vncserver -kill :1 >/dev/null 2>&1 || true'
-          sudo -u "${RUNNER_USERNAME}" bash -lc 'cd ~ && vncserver :1 -localhost no -geometry 1440x900 -depth 24'
+          sudo -u "${RUNNER_USERNAME}" bash -lc 'cd ~ && vncserver -kill :0 >/dev/null 2>&1 || true'
+          sudo -u "${RUNNER_USERNAME}" bash -lc 'cd ~ && vncserver :0 -localhost no -geometry 1440x900 -depth 24'
 
       - name: Install GitLab Runner
         run: |
