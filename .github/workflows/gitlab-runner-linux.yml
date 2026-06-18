@@ -8,9 +8,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     env:
-      GITLAB_URL: ${{ vars.GITLAB_URL || 'https://gitlab.com' }}
+      GITLAB_URL: ${{ vars.GITLAB_URL }}
       GITLAB_RUNNER_TOKEN: ${{ secrets.GITLAB_RUNNER_TOKEN_LINUX }}
+      LOG_LEVEL: warn
       RUNNER_TAGS: grokauto-docker
+      RUNNER_USERNAME: ${{ vars.RUNNER_USERNAME }}
+      RUNNER_PASSWORD: ${{ secrets.RUNNER_PASSWORD }}
       RUNNER_CONFIG: /tmp/gitlab-runner-linux/config.toml
       RUNNER_WORKDIR: /tmp/gitlab-runner-linux/work
       DEFAULT_DOCKER_IMAGE: alpine:3.20
@@ -19,8 +22,45 @@ jobs:
       - name: Connect Tailscale
         uses: tailscale/github-action@v4
         with:
-          authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:github-runner
           hostname: gh-linux-${{ github.run_id }}
+
+      - name: Configure SSH and VNC
+        run: |
+          set -euo pipefail
+          if [ -z "${RUNNER_PASSWORD}" ]; then
+            echo "::error::Missing secret RUNNER_PASSWORD"
+            exit 1
+          fi
+
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            openssh-server xfce4 xfce4-goodies dbus-x11 tigervnc-standalone-server
+
+          if ! id "${RUNNER_USERNAME}" >/dev/null 2>&1; then
+            sudo useradd -m -s /bin/bash "${RUNNER_USERNAME}"
+          fi
+          echo "${RUNNER_USERNAME}:${RUNNER_PASSWORD}" | sudo chpasswd
+          sudo usermod -aG sudo "${RUNNER_USERNAME}"
+
+          sudo mkdir -p /run/sshd
+          sudo sed -i 's/^#\?PasswordAuthentication .*/PasswordAuthentication yes/' /etc/ssh/sshd_config
+          sudo sed -i 's/^#\?PermitRootLogin .*/PermitRootLogin no/' /etc/ssh/sshd_config
+          sudo systemctl restart ssh || sudo service ssh restart
+
+          sudo -u "${RUNNER_USERNAME}" mkdir -p "/home/${RUNNER_USERNAME}/.vnc"
+          printf '%s\n%s\nn\n' "${RUNNER_PASSWORD}" "${RUNNER_PASSWORD}" | sudo -u "${RUNNER_USERNAME}" vncpasswd >/dev/null
+          sudo -u "${RUNNER_USERNAME}" tee "/home/${RUNNER_USERNAME}/.vnc/xstartup" >/dev/null <<'EOF'
+          #!/bin/sh
+          unset SESSION_MANAGER
+          unset DBUS_SESSION_BUS_ADDRESS
+          startxfce4 &
+          EOF
+          sudo chmod +x "/home/${RUNNER_USERNAME}/.vnc/xstartup"
+          sudo -u "${RUNNER_USERNAME}" vncserver -kill :1 >/dev/null 2>&1 || true
+          sudo -u "${RUNNER_USERNAME}" vncserver :1 -localhost no -geometry 1440x900 -depth 24
 
       - name: Install GitLab Runner
         run: |
@@ -49,6 +89,19 @@ jobs:
             --executor "docker" \
             --docker-image "$DEFAULT_DOCKER_IMAGE"
 
+          python3 - "$RUNNER_CONFIG" <<'PY'
+          from pathlib import Path
+          import re
+          path = Path(__import__("sys").argv[1])
+          text = path.read_text()
+          text = re.sub(r"^concurrent = \d+", "concurrent = 2", text, count=1, flags=re.M)
+          if "request_concurrency" in text:
+              text = re.sub(r"request_concurrency = \d+", "request_concurrency = 2", text)
+          else:
+              text = text.replace("  executor =", "  request_concurrency = 2\n  executor =", 1)
+          path.write_text(text)
+          PY
+
           cleanup() {
             gitlab-runner unregister --config "$RUNNER_CONFIG" --all-runners || true
           }
@@ -56,11 +109,4 @@ jobs:
 
           echo "GitLab Linux runner active: gh-linux-${GITHUB_RUN_ID}"
           echo "Tags: ${RUNNER_TAGS}"
-          gitlab-runner run --config "$RUNNER_CONFIG" --working-directory "$RUNNER_WORKDIR" &
-          RUNNER_PID=$!
-
-          while kill -0 "$RUNNER_PID" 2>/dev/null; do
-            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] linux runner alive"
-            sleep 300
-          done
-          wait "$RUNNER_PID"
+          gitlab-runner run --config "$RUNNER_CONFIG" --working-directory "$RUNNER_WORKDIR"

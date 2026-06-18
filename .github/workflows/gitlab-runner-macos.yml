@@ -8,9 +8,12 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 360
     env:
-      GITLAB_URL: ${{ vars.GITLAB_URL || 'https://gitlab.com' }}
+      GITLAB_URL: ${{ vars.GITLAB_URL }}
       GITLAB_RUNNER_TOKEN: ${{ secrets.GITLAB_RUNNER_TOKEN_MACOS }}
+      LOG_LEVEL: warn
       RUNNER_TAGS: saas-macos-medium-m1
+      RUNNER_USERNAME: ${{ vars.RUNNER_USERNAME }}
+      RUNNER_PASSWORD: ${{ secrets.RUNNER_PASSWORD }}
       RUNNER_CONFIG: /tmp/gitlab-runner-macos/config.toml
       RUNNER_WORKDIR: /tmp/gitlab-runner-macos/work
 
@@ -18,8 +21,33 @@ jobs:
       - name: Connect Tailscale
         uses: tailscale/github-action@v4
         with:
-          authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+          oauth-client-id: ${{ secrets.TS_OAUTH_CLIENT_ID }}
+          oauth-secret: ${{ secrets.TS_OAUTH_SECRET }}
+          tags: tag:github-runner
           hostname: gh-mac-${{ github.run_id }}
+
+      - name: Configure SSH and VNC
+        run: |
+          set -euo pipefail
+          if [ -z "${RUNNER_PASSWORD}" ]; then
+            echo "::error::Missing secret RUNNER_PASSWORD"
+            exit 1
+          fi
+
+          if ! id "${RUNNER_USERNAME}" >/dev/null 2>&1; then
+            sudo sysadminctl -addUser "${RUNNER_USERNAME}" -fullName "${RUNNER_USERNAME}" -password "${RUNNER_PASSWORD}" -admin
+          else
+            sudo sysadminctl -resetPasswordFor "${RUNNER_USERNAME}" -newPassword "${RUNNER_PASSWORD}"
+          fi
+
+          sudo systemsetup -setremotelogin on
+          sudo /System/Library/CoreServices/RemoteManagement/ARDAgent.app/Contents/Resources/kickstart \
+            -activate \
+            -configure -access -on \
+            -configure -users "${RUNNER_USERNAME}" -privs -all \
+            -configure -clientopts -setvnclegacy -vnclegacy yes \
+            -configure -clientopts -setvncpw -vncpw "${RUNNER_PASSWORD}" \
+            -restart -agent -menu
 
       - name: Install GitLab Runner
         run: |
@@ -44,6 +72,19 @@ jobs:
             --name "gh-mac-${GITHUB_RUN_ID}" \
             --executor "shell"
 
+          python3 - "$RUNNER_CONFIG" <<'PY'
+          from pathlib import Path
+          import re
+          path = Path(__import__("sys").argv[1])
+          text = path.read_text()
+          text = re.sub(r"^concurrent = \d+", "concurrent = 2", text, count=1, flags=re.M)
+          if "request_concurrency" in text:
+              text = re.sub(r"request_concurrency = \d+", "request_concurrency = 2", text)
+          else:
+              text = text.replace("  executor =", "  request_concurrency = 2\n  executor =", 1)
+          path.write_text(text)
+          PY
+
           cleanup() {
             gitlab-runner unregister --config "$RUNNER_CONFIG" --all-runners || true
           }
@@ -51,11 +92,4 @@ jobs:
 
           echo "GitLab macOS runner active: gh-mac-${GITHUB_RUN_ID}"
           echo "Tags: ${RUNNER_TAGS}"
-          gitlab-runner run --config "$RUNNER_CONFIG" --working-directory "$RUNNER_WORKDIR" &
-          RUNNER_PID=$!
-
-          while kill -0 "$RUNNER_PID" 2>/dev/null; do
-            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] macOS runner alive"
-            sleep 300
-          done
-          wait "$RUNNER_PID"
+          gitlab-runner run --config "$RUNNER_CONFIG" --working-directory "$RUNNER_WORKDIR"
