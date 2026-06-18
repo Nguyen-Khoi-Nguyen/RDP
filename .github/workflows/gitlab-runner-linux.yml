@@ -40,28 +40,27 @@ jobs:
           fi
 
           mkdir -p "$(dirname "$RUNNER_CONFIG")" "$RUNNER_WORKDIR"
-          gitlab-runner --config "$RUNNER_CONFIG" register \
+          gitlab-runner register \
+            --config "$RUNNER_CONFIG" \
             --non-interactive \
             --url "$GITLAB_URL" \
             --token "$GITLAB_RUNNER_TOKEN" \
             --name "gh-linux-${GITHUB_RUN_ID}" \
             --executor "docker" \
-            --docker-image "$DEFAULT_DOCKER_IMAGE" \
-            --tag-list "$RUNNER_TAGS" \
-            --run-untagged="false" \
-            --locked="false"
+            --docker-image "$DEFAULT_DOCKER_IMAGE"
 
           cleanup() {
-            gitlab-runner --config "$RUNNER_CONFIG" unregister --all-runners || true
+            gitlab-runner unregister --config "$RUNNER_CONFIG" --all-runners || true
           }
           trap cleanup EXIT INT TERM
 
           echo "GitLab Linux runner active: gh-linux-${GITHUB_RUN_ID}"
           echo "Tags: ${RUNNER_TAGS}"
-          gitlab-runner --config "$RUNNER_CONFIG" run --working-directory "$RUNNER_WORKDIR" &
+          gitlab-runner run --config "$RUNNER_CONFIG" --working-directory "$RUNNER_WORKDIR" &
           RUNNER_PID=$!
 
           while kill -0 "$RUNNER_PID" 2>/dev/null; do
             echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] linux runner alive"
             sleep 300
           done
+          wait "$RUNNER_PID"
