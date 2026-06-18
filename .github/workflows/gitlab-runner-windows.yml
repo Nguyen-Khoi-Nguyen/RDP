@@ -20,7 +20,6 @@ jobs:
         with:
           authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
           hostname: gh-win-${{ github.run_id }}
-          args: --accept-routes
 
       - name: Install GitLab Runner
         shell: powershell
