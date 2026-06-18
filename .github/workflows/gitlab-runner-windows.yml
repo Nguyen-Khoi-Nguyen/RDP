@@ -41,6 +41,7 @@ jobs:
           }
 
           $runner = "$env:RUNNER_DIR\gitlab-runner.exe"
+          New-Item -ItemType Directory -Force "$env:RUNNER_DIR\work" | Out-Null
           $registerArgs = @(
             'register',
             '--config', $env:RUNNER_CONFIG,
