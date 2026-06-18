@@ -1,0 +1,75 @@
+name: GitLab Runner Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  windows-runner:
+    runs-on: windows-2025
+    timeout-minutes: 360
+    env:
+      GITLAB_URL: ${{ vars.GITLAB_URL || 'https://gitlab.com' }}
+      GITLAB_RUNNER_TOKEN: ${{ secrets.GITLAB_RUNNER_TOKEN_WINDOWS }}
+      RUNNER_TAGS: saas-windows-medium-amd64
+      RUNNER_DIR: C:\gitlab-runner
+      RUNNER_CONFIG: C:\gitlab-runner\config.toml
+
+    steps:
+      - name: Connect Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+          hostname: gh-win-${{ github.run_id }}
+          args: --accept-routes
+
+      - name: Install GitLab Runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force $env:RUNNER_DIR | Out-Null
+          Invoke-WebRequest `
+            "https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-windows-amd64.exe" `
+            -OutFile "$env:RUNNER_DIR\gitlab-runner.exe"
+          & "$env:RUNNER_DIR\gitlab-runner.exe" --version
+
+      - name: Register and run GitLab Runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:GITLAB_RUNNER_TOKEN) {
+            Write-Error 'Missing secret GITLAB_RUNNER_TOKEN_WINDOWS'
+            exit 1
+          }
+
+          $runner = "$env:RUNNER_DIR\gitlab-runner.exe"
+          & $runner --config $env:RUNNER_CONFIG register `
+            --non-interactive `
+            --url $env:GITLAB_URL `
+            --token $env:GITLAB_RUNNER_TOKEN `
+            --name "gh-win-$env:GITHUB_RUN_ID" `
+            --executor shell `
+            --shell powershell `
+            --tag-list $env:RUNNER_TAGS `
+            --run-untagged=false `
+            --locked=false
+
+          $process = Start-Process $runner -ArgumentList @(
+            '--config', $env:RUNNER_CONFIG,
+            'run',
+            '--working-directory', "$env:RUNNER_DIR\work"
+          ) -PassThru -WindowStyle Hidden
+
+          try {
+            Write-Host "GitLab Windows runner active: gh-win-$env:GITHUB_RUN_ID"
+            Write-Host "Tags: $env:RUNNER_TAGS"
+            while (-not $process.HasExited) {
+              Write-Host "[$(Get-Date -Format o)] windows runner alive"
+              Start-Sleep -Seconds 300
+            }
+            exit $process.ExitCode
+          } finally {
+            if (-not $process.HasExited) {
+              Stop-Process -Id $process.Id -Force -ErrorAction SilentlyContinue
+            }
+            & $runner --config $env:RUNNER_CONFIG unregister --all-runners
+          }

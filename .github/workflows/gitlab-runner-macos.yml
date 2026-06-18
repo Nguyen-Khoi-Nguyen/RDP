@@ -1,0 +1,63 @@
+name: GitLab Runner macOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  macos-runner:
+    runs-on: macos-15
+    timeout-minutes: 360
+    env:
+      GITLAB_URL: ${{ vars.GITLAB_URL || 'https://gitlab.com' }}
+      GITLAB_RUNNER_TOKEN: ${{ secrets.GITLAB_RUNNER_TOKEN_MACOS }}
+      RUNNER_TAGS: saas-macos-medium-m1
+      RUNNER_CONFIG: /tmp/gitlab-runner-macos/config.toml
+      RUNNER_WORKDIR: /tmp/gitlab-runner-macos/work
+
+    steps:
+      - name: Connect Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+          hostname: gh-mac-${{ github.run_id }}
+          args: --accept-routes
+
+      - name: Install GitLab Runner
+        run: |
+          brew install gitlab-runner
+          gitlab-runner --version
+          uname -a
+
+      - name: Register and run GitLab Runner
+        run: |
+          set -euo pipefail
+          if [ -z "${GITLAB_RUNNER_TOKEN}" ]; then
+            echo "::error::Missing secret GITLAB_RUNNER_TOKEN_MACOS"
+            exit 1
+          fi
+
+          mkdir -p "$(dirname "$RUNNER_CONFIG")" "$RUNNER_WORKDIR"
+          gitlab-runner --config "$RUNNER_CONFIG" register \
+            --non-interactive \
+            --url "$GITLAB_URL" \
+            --token "$GITLAB_RUNNER_TOKEN" \
+            --name "gh-mac-${GITHUB_RUN_ID}" \
+            --executor "shell" \
+            --tag-list "$RUNNER_TAGS" \
+            --run-untagged="false" \
+            --locked="false"
+
+          cleanup() {
+            gitlab-runner --config "$RUNNER_CONFIG" unregister --all-runners || true
+          }
+          trap cleanup EXIT INT TERM
+
+          echo "GitLab macOS runner active: gh-mac-${GITHUB_RUN_ID}"
+          echo "Tags: ${RUNNER_TAGS}"
+          gitlab-runner --config "$RUNNER_CONFIG" run --working-directory "$RUNNER_WORKDIR" &
+          RUNNER_PID=$!
+
+          while kill -0 "$RUNNER_PID" 2>/dev/null; do
+            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] macOS runner alive"
+            sleep 300
+          done

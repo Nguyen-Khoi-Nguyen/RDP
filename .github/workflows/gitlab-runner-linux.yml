@@ -1,0 +1,68 @@
+name: GitLab Runner Linux
+
+on:
+  workflow_dispatch:
+
+jobs:
+  linux-runner:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+    env:
+      GITLAB_URL: ${{ vars.GITLAB_URL || 'https://gitlab.com' }}
+      GITLAB_RUNNER_TOKEN: ${{ secrets.GITLAB_RUNNER_TOKEN_LINUX }}
+      RUNNER_TAGS: grokauto-docker
+      RUNNER_CONFIG: /tmp/gitlab-runner-linux/config.toml
+      RUNNER_WORKDIR: /tmp/gitlab-runner-linux/work
+      DEFAULT_DOCKER_IMAGE: alpine:3.20
+
+    steps:
+      - name: Connect Tailscale
+        uses: tailscale/github-action@v4
+        with:
+          authkey: ${{ secrets.TAILSCALE_AUTH_KEY }}
+          hostname: gh-linux-${{ github.run_id }}
+          args: --accept-routes
+
+      - name: Install GitLab Runner
+        run: |
+          sudo curl -fsSL \
+            "https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-linux-amd64" \
+            -o /usr/local/bin/gitlab-runner
+          sudo chmod +x /usr/local/bin/gitlab-runner
+          gitlab-runner --version
+          docker version
+
+      - name: Register and run GitLab Runner
+        run: |
+          set -euo pipefail
+          if [ -z "${GITLAB_RUNNER_TOKEN}" ]; then
+            echo "::error::Missing secret GITLAB_RUNNER_TOKEN_LINUX"
+            exit 1
+          fi
+
+          mkdir -p "$(dirname "$RUNNER_CONFIG")" "$RUNNER_WORKDIR"
+          gitlab-runner --config "$RUNNER_CONFIG" register \
+            --non-interactive \
+            --url "$GITLAB_URL" \
+            --token "$GITLAB_RUNNER_TOKEN" \
+            --name "gh-linux-${GITHUB_RUN_ID}" \
+            --executor "docker" \
+            --docker-image "$DEFAULT_DOCKER_IMAGE" \
+            --tag-list "$RUNNER_TAGS" \
+            --run-untagged="false" \
+            --locked="false"
+
+          cleanup() {
+            gitlab-runner --config "$RUNNER_CONFIG" unregister --all-runners || true
+          }
+          trap cleanup EXIT INT TERM
+
+          echo "GitLab Linux runner active: gh-linux-${GITHUB_RUN_ID}"
+          echo "Tags: ${RUNNER_TAGS}"
+          gitlab-runner --config "$RUNNER_CONFIG" run --working-directory "$RUNNER_WORKDIR" &
+          RUNNER_PID=$!
+
+          while kill -0 "$RUNNER_PID" 2>/dev/null; do
+            echo "[$(date -u '+%Y-%m-%dT%H:%M:%SZ')] linux runner alive"
+            sleep 300
+          done
