@@ -53,11 +53,11 @@ jobs:
           sudo -u "${RUNNER_USERNAME}" mkdir -p "/home/${RUNNER_USERNAME}/.vnc"
           printf '%s\n%s\nn\n' "${RUNNER_PASSWORD}" "${RUNNER_PASSWORD}" | sudo -u "${RUNNER_USERNAME}" vncpasswd >/dev/null
           sudo -u "${RUNNER_USERNAME}" tee "/home/${RUNNER_USERNAME}/.vnc/xstartup" >/dev/null <<'EOF'
-#!/bin/sh
-unset SESSION_MANAGER
-unset DBUS_SESSION_BUS_ADDRESS
-exec startxfce4
-EOF
+          #!/bin/sh
+          unset SESSION_MANAGER
+          unset DBUS_SESSION_BUS_ADDRESS
+          exec startxfce4
+          EOF
           sudo chmod +x "/home/${RUNNER_USERNAME}/.vnc/xstartup"
           sudo -u "${RUNNER_USERNAME}" bash -lc 'cd ~ && vncserver -kill :1 >/dev/null 2>&1 || true'
           sudo -u "${RUNNER_USERNAME}" bash -lc 'cd ~ && vncserver :1 -localhost no -geometry 1440x900 -depth 24'
