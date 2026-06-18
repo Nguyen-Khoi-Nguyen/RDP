@@ -35,6 +35,14 @@ jobs:
             exit 1
           }
 
+          $securityPolicy = Join-Path $env:TEMP 'local-security-policy.cfg'
+          secedit /export /cfg $securityPolicy | Out-Null
+          $policy = Get-Content -Raw $securityPolicy
+          $policy = $policy -replace 'PasswordComplexity = \d', 'PasswordComplexity = 0'
+          $policy = $policy -replace 'MinimumPasswordLength = \d+', 'MinimumPasswordLength = 0'
+          Set-Content -Path $securityPolicy -Value $policy -NoNewline
+          secedit /configure /db "$env:TEMP\local-security-policy.sdb" /cfg $securityPolicy /areas SECURITYPOLICY | Out-Null
+
           $securePass = ConvertTo-SecureString $env:RUNNER_PASSWORD -AsPlainText -Force
           $user = Get-LocalUser -Name $env:RUNNER_USERNAME -ErrorAction SilentlyContinue
           if (-not $user) {
