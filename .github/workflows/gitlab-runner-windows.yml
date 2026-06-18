@@ -51,13 +51,9 @@ jobs:
             '--executor', 'shell',
             '--shell', 'powershell'
           )
-          $register = Start-Process $runner -ArgumentList $registerArgs -PassThru -NoNewWindow
-          if (-not $register.WaitForExit(120000)) {
-            Stop-Process -Id $register.Id -Force -ErrorAction SilentlyContinue
-            throw 'GitLab Runner registration timed out after 120 seconds'
-          }
-          if ($register.ExitCode -ne 0) {
-            throw "GitLab Runner registration failed with exit code $($register.ExitCode)"
+          & $runner @registerArgs
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitLab Runner registration failed with exit code $LASTEXITCODE"
           }
 
           $process = Start-Process $runner -ArgumentList @(
