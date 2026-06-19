@@ -65,8 +65,7 @@ jobs:
           try {
             & $runner run `
               --config $env:RUNNER_CONFIG `
-              --working-directory "$env:RUNNER_DIR\work" `
-              --wait-timeout 1800
+              --working-directory "$env:RUNNER_DIR\work"
             if ($LASTEXITCODE -ne 0) {
               throw "GitLab Runner exited with code $LASTEXITCODE"
             }

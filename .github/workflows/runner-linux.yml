@@ -70,5 +70,4 @@ jobs:
 
           gitlab-runner run \
             --config "$RUNNER_CONFIG" \
-            --working-directory "$RUNNER_WORKDIR" \
-            --wait-timeout 1800
+            --working-directory "$RUNNER_WORKDIR"
