@@ -1,4 +1,4 @@
-name: Runner Windows
+name: GitLab Runner Windows
 
 on:
   workflow_dispatch:

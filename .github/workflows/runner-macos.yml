@@ -1,4 +1,4 @@
-name: Runner macOS
+name: GitLab Runner macOS
 
 on:
   workflow_dispatch:
