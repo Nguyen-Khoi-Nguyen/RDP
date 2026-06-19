@@ -2,11 +2,31 @@ name: GitLab Runner macOS
 
 on:
   workflow_dispatch:
+    inputs:
+      source:
+        description: Dispatch source guard
+        required: true
+        type: string
+      release_tag:
+        description: GitLab release tag
+        required: false
+        type: string
+      pipeline_id:
+        description: GitLab pipeline ID
+        required: false
+        type: string
+
+run-name: GitLab Runner macOS ${{ inputs.release_tag || 'manual' }}
+
+concurrency:
+  group: gitlab-runner-macos
+  cancel-in-progress: true
 
 jobs:
   runner-macos:
+    if: ${{ inputs.source == 'gitlab-release' }}
     runs-on: macos-15
-    timeout-minutes: 120
+    timeout-minutes: 75
     env:
       GITLAB_URL: ${{ vars.GITLAB_URL }}
       GITLAB_RUNNER_TOKEN: ${{ secrets.GITLAB_RUNNER_TOKEN_MACOS }}
@@ -68,4 +88,6 @@ jobs:
 
           gitlab-runner run \
             --config "$RUNNER_CONFIG" \
-            --working-directory "$RUNNER_WORKDIR"
+            --working-directory "$RUNNER_WORKDIR" \
+            --max-builds 1 \
+            --wait-timeout 900
