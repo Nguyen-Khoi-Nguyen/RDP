@@ -1,0 +1,70 @@
+name: Runner macOS
+
+on:
+  workflow_dispatch:
+
+jobs:
+  runner-macos:
+    runs-on: macos-15
+    timeout-minutes: 120
+    env:
+      GITLAB_URL: ${{ vars.GITLAB_URL }}
+      GITLAB_RUNNER_TOKEN: ${{ secrets.GITLAB_RUNNER_TOKEN_MACOS }}
+      LOG_LEVEL: warn
+      RUNNER_CONFIG: /tmp/gitlab-runner-macos/config.toml
+      RUNNER_WORKDIR: /tmp/gitlab-runner-macos/work
+
+    steps:
+      - name: Install GitLab Runner
+        run: |
+          set -euo pipefail
+          brew install gitlab-runner
+          gitlab-runner --version
+          uname -a
+
+      - name: Register and run one GitLab job
+        run: |
+          set -euo pipefail
+          if [ -z "${GITLAB_URL}" ]; then
+            echo "::error::Missing variable GITLAB_URL"
+            exit 1
+          fi
+          if [ -z "${GITLAB_RUNNER_TOKEN}" ]; then
+            echo "::error::Missing secret GITLAB_RUNNER_TOKEN_MACOS"
+            exit 1
+          fi
+
+          mkdir -p "$(dirname "$RUNNER_CONFIG")" "$RUNNER_WORKDIR"
+          gitlab-runner register \
+            --config "$RUNNER_CONFIG" \
+            --non-interactive \
+            --url "$GITLAB_URL" \
+            --token "$GITLAB_RUNNER_TOKEN" \
+            --name "gh-macos-${GITHUB_RUN_ID}" \
+            --executor "shell"
+
+          python3 - "$RUNNER_CONFIG" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          text = re.sub(r"^concurrent = \d+", "concurrent = 1", text, count=1, flags=re.M)
+          if "request_concurrency" in text:
+              text = re.sub(r"request_concurrency = \d+", "request_concurrency = 1", text)
+          else:
+              text = text.replace("  executor =", "  request_concurrency = 1\n  executor =", 1)
+          path.write_text(text)
+          PY
+
+          cleanup() {
+            gitlab-runner unregister --config "$RUNNER_CONFIG" --all-runners || true
+          }
+          trap cleanup EXIT INT TERM
+
+          gitlab-runner run \
+            --config "$RUNNER_CONFIG" \
+            --working-directory "$RUNNER_WORKDIR" \
+            --max-builds 1 \
+            --wait-timeout 1800

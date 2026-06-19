@@ -1,0 +1,75 @@
+name: Runner Linux
+
+on:
+  workflow_dispatch:
+
+jobs:
+  runner-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    env:
+      GITLAB_URL: ${{ vars.GITLAB_URL }}
+      GITLAB_RUNNER_TOKEN: ${{ secrets.GITLAB_RUNNER_TOKEN_LINUX }}
+      LOG_LEVEL: warn
+      RUNNER_CONFIG: /tmp/gitlab-runner-linux/config.toml
+      RUNNER_WORKDIR: /tmp/gitlab-runner-linux/work
+      DEFAULT_DOCKER_IMAGE: alpine:3.20
+
+    steps:
+      - name: Install GitLab Runner
+        run: |
+          set -euo pipefail
+          sudo curl -fsSL \
+            "https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-linux-amd64" \
+            -o /usr/local/bin/gitlab-runner
+          sudo chmod +x /usr/local/bin/gitlab-runner
+          gitlab-runner --version
+          docker version
+
+      - name: Register and run one GitLab job
+        run: |
+          set -euo pipefail
+          if [ -z "${GITLAB_URL}" ]; then
+            echo "::error::Missing variable GITLAB_URL"
+            exit 1
+          fi
+          if [ -z "${GITLAB_RUNNER_TOKEN}" ]; then
+            echo "::error::Missing secret GITLAB_RUNNER_TOKEN_LINUX"
+            exit 1
+          fi
+
+          mkdir -p "$(dirname "$RUNNER_CONFIG")" "$RUNNER_WORKDIR"
+          gitlab-runner register \
+            --config "$RUNNER_CONFIG" \
+            --non-interactive \
+            --url "$GITLAB_URL" \
+            --token "$GITLAB_RUNNER_TOKEN" \
+            --name "gh-linux-${GITHUB_RUN_ID}" \
+            --executor "docker" \
+            --docker-image "$DEFAULT_DOCKER_IMAGE"
+
+          python3 - "$RUNNER_CONFIG" <<'PY'
+          from pathlib import Path
+          import re
+          import sys
+
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          text = re.sub(r"^concurrent = \d+", "concurrent = 1", text, count=1, flags=re.M)
+          if "request_concurrency" in text:
+              text = re.sub(r"request_concurrency = \d+", "request_concurrency = 1", text)
+          else:
+              text = text.replace("  executor =", "  request_concurrency = 1\n  executor =", 1)
+          path.write_text(text)
+          PY
+
+          cleanup() {
+            gitlab-runner unregister --config "$RUNNER_CONFIG" --all-runners || true
+          }
+          trap cleanup EXIT INT TERM
+
+          gitlab-runner run \
+            --config "$RUNNER_CONFIG" \
+            --working-directory "$RUNNER_WORKDIR" \
+            --max-builds 1 \
+            --wait-timeout 1800

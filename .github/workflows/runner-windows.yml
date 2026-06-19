@@ -1,0 +1,76 @@
+name: Runner Windows
+
+on:
+  workflow_dispatch:
+
+jobs:
+  runner-windows:
+    runs-on: windows-2025
+    timeout-minutes: 120
+    env:
+      GITLAB_URL: ${{ vars.GITLAB_URL }}
+      GITLAB_RUNNER_TOKEN: ${{ secrets.GITLAB_RUNNER_TOKEN_WINDOWS }}
+      LOG_LEVEL: warn
+      RUNNER_DIR: C:\gitlab-runner
+      RUNNER_CONFIG: C:\gitlab-runner\config.toml
+
+    steps:
+      - name: Install GitLab Runner
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force $env:RUNNER_DIR | Out-Null
+          Invoke-WebRequest `
+            "https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-windows-amd64.exe" `
+            -OutFile "$env:RUNNER_DIR\gitlab-runner.exe"
+          & "$env:RUNNER_DIR\gitlab-runner.exe" --version
+
+      - name: Register and run one GitLab job
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not $env:GITLAB_URL) {
+            throw 'Missing variable GITLAB_URL'
+          }
+          if (-not $env:GITLAB_RUNNER_TOKEN) {
+            throw 'Missing secret GITLAB_RUNNER_TOKEN_WINDOWS'
+          }
+
+          $runner = "$env:RUNNER_DIR\gitlab-runner.exe"
+          New-Item -ItemType Directory -Force "$env:RUNNER_DIR\work" | Out-Null
+          $registerArgs = @(
+            'register',
+            '--config', $env:RUNNER_CONFIG,
+            '--non-interactive',
+            '--url', $env:GITLAB_URL,
+            '--token', $env:GITLAB_RUNNER_TOKEN,
+            '--name', "gh-windows-$env:GITHUB_RUN_ID",
+            '--executor', 'shell',
+            '--shell', 'powershell'
+          )
+          & $runner @registerArgs
+          if ($LASTEXITCODE -ne 0) {
+            throw "GitLab Runner registration failed with exit code $LASTEXITCODE"
+          }
+
+          $config = Get-Content -Raw $env:RUNNER_CONFIG
+          $config = $config -replace '(?m)^concurrent = \d+', 'concurrent = 1'
+          if ($config -match 'request_concurrency = \d+') {
+            $config = $config -replace 'request_concurrency = \d+', 'request_concurrency = 1'
+          } else {
+            $config = $config -replace '  executor =', "  request_concurrency = 1`n  executor ="
+          }
+          Set-Content -Path $env:RUNNER_CONFIG -Value $config -NoNewline
+
+          try {
+            & $runner run `
+              --config $env:RUNNER_CONFIG `
+              --working-directory "$env:RUNNER_DIR\work" `
+              --max-builds 1 `
+              --wait-timeout 1800
+            if ($LASTEXITCODE -ne 0) {
+              throw "GitLab Runner exited with code $LASTEXITCODE"
+            }
+          } finally {
+            & $runner unregister --config $env:RUNNER_CONFIG --all-runners
+          }
