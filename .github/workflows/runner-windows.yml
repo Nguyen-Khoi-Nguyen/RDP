@@ -16,7 +16,7 @@ on:
         required: false
         type: string
 
-run-name: GitLab Runner Windows ${{ inputs.release_tag || 'manual' }}
+run-name: GitLab Runner Windows ${{ github.event.inputs.release_tag || 'manual' }}
 
 concurrency:
   group: gitlab-runner-windows
@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   runner-windows:
-    if: ${{ inputs.source == 'gitlab-release' }}
+    if: ${{ github.event.inputs.source == 'gitlab-release' && github.event.inputs.pipeline_id != '' }}
     runs-on: windows-2025
     timeout-minutes: 75
     env:

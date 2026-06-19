@@ -16,7 +16,7 @@ on:
         required: false
         type: string
 
-run-name: GitLab Runner macOS ${{ inputs.release_tag || 'manual' }}
+run-name: GitLab Runner macOS ${{ github.event.inputs.release_tag || 'manual' }}
 
 concurrency:
   group: gitlab-runner-macos
@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   runner-macos:
-    if: ${{ inputs.source == 'gitlab-release' }}
+    if: ${{ github.event.inputs.source == 'gitlab-release' && github.event.inputs.pipeline_id != '' }}
     runs-on: macos-15
     timeout-minutes: 75
     env:

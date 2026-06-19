@@ -16,7 +16,7 @@ on:
         required: false
         type: string
 
-run-name: GitLab Runner Linux ${{ inputs.release_tag || 'manual' }}
+run-name: GitLab Runner Linux ${{ github.event.inputs.release_tag || 'manual' }}
 
 concurrency:
   group: gitlab-runner-linux
@@ -24,7 +24,7 @@ concurrency:
 
 jobs:
   runner-linux:
-    if: ${{ inputs.source == 'gitlab-release' }}
+    if: ${{ github.event.inputs.source == 'gitlab-release' && github.event.inputs.pipeline_id != '' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     env:
