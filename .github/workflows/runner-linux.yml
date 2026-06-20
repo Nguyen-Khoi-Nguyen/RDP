@@ -1,4 +1,5 @@
 name: GitLab Runner Linux
+# Ephemeral GitLab release runner. Runs one GitLab job then exits.
 
 on:
   workflow_dispatch:
