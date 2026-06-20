@@ -35,9 +35,9 @@ jobs:
       RUNNER_DIR: C:\gitlab-runner
       RUNNER_CONFIG: C:\gitlab-runner\config.toml
       GROKAUTO_CACHE_DIR: ${{ github.workspace }}\.grokauto-cache
+      GROKAUTO_SOURCE_DIR: ${{ github.workspace }}\grokauto-src
       PNPM_STORE_DIR: ${{ github.workspace }}\.grokauto-cache\pnpm-store
       CARGO_HOME: ${{ github.workspace }}\.grokauto-cache\cargo-home
-      CARGO_TARGET_DIR: ${{ github.workspace }}\.grokauto-cache\cargo-target
       ELECTRON_CACHE: ${{ github.workspace }}\.grokauto-cache\electron
       ELECTRON_BUILDER_CACHE: ${{ github.workspace }}\.grokauto-cache\electron-builder
 
@@ -54,9 +54,10 @@ jobs:
             .grokauto-cache\pnpm-store
             .grokauto-cache\cargo-home\registry
             .grokauto-cache\cargo-home\git
-            .grokauto-cache\cargo-target
             .grokauto-cache\electron
             .grokauto-cache\electron-builder
+            .grokauto-cache\gitlab-runner\gitlab-runner.exe
+            grokauto-src\native\target
           key: grokauto-windows-release-v1
 
       - name: Prepare cached toolchain dirs
@@ -65,9 +66,9 @@ jobs:
           $ErrorActionPreference = 'Stop'
           foreach ($dir in @(
             $env:GROKAUTO_CACHE_DIR,
+            $env:GROKAUTO_SOURCE_DIR,
             $env:PNPM_STORE_DIR,
             $env:CARGO_HOME,
-            $env:CARGO_TARGET_DIR,
             $env:ELECTRON_CACHE,
             $env:ELECTRON_BUILDER_CACHE
           )) {
@@ -86,9 +87,14 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force $env:RUNNER_DIR | Out-Null
-          Invoke-WebRequest `
-            "https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-windows-amd64.exe" `
-            -OutFile "$env:RUNNER_DIR\gitlab-runner.exe"
+          $cachedRunner = Join-Path $env:GROKAUTO_CACHE_DIR 'gitlab-runner\gitlab-runner.exe'
+          New-Item -ItemType Directory -Force (Split-Path -Parent $cachedRunner) | Out-Null
+          if (-not (Test-Path -LiteralPath $cachedRunner)) {
+            Invoke-WebRequest `
+              "https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-windows-amd64.exe" `
+              -OutFile $cachedRunner
+          }
+          Copy-Item -LiteralPath $cachedRunner -Destination "$env:RUNNER_DIR\gitlab-runner.exe" -Force
           & "$env:RUNNER_DIR\gitlab-runner.exe" --version
 
       - name: Register and run one GitLab job
