@@ -59,13 +59,14 @@ jobs:
             exit 1
           fi
 
+          runner_name="gh-linux-${GITHUB_RUN_ID}"
           mkdir -p "$(dirname "$RUNNER_CONFIG")" "$RUNNER_WORKDIR"
           gitlab-runner register \
             --config "$RUNNER_CONFIG" \
             --non-interactive \
             --url "$GITLAB_URL" \
             --token "$GITLAB_RUNNER_TOKEN" \
-            --name "gh-linux-${GITHUB_RUN_ID}" \
+            --name "$runner_name" \
             --executor "docker" \
             --docker-image "$DEFAULT_DOCKER_IMAGE"
 
@@ -89,8 +90,8 @@ jobs:
           }
           trap cleanup EXIT INT TERM
 
-          gitlab-runner run \
+          gitlab-runner run-single \
             --config "$RUNNER_CONFIG" \
-            --working-directory "$RUNNER_WORKDIR" \
+            -r "$runner_name" \
             --max-builds 1 \
             --wait-timeout 900
