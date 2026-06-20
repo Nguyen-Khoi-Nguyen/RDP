@@ -27,15 +27,60 @@ jobs:
   runner-windows:
     if: ${{ github.event.inputs.source == 'gitlab-release' && github.event.inputs.pipeline_id != '' }}
     runs-on: windows-2025
-    timeout-minutes: 75
+    timeout-minutes: 35
     env:
       GITLAB_URL: ${{ vars.GITLAB_URL }}
       GITLAB_RUNNER_TOKEN: ${{ secrets.GITLAB_RUNNER_TOKEN_WINDOWS }}
       LOG_LEVEL: warn
       RUNNER_DIR: C:\gitlab-runner
       RUNNER_CONFIG: C:\gitlab-runner\config.toml
+      GROKAUTO_CACHE_DIR: ${{ github.workspace }}\.grokauto-cache
+      PNPM_STORE_DIR: ${{ github.workspace }}\.grokauto-cache\pnpm-store
+      CARGO_HOME: ${{ github.workspace }}\.grokauto-cache\cargo-home
+      CARGO_TARGET_DIR: ${{ github.workspace }}\.grokauto-cache\cargo-target
+      ELECTRON_CACHE: ${{ github.workspace }}\.grokauto-cache\electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}\.grokauto-cache\electron-builder
 
     steps:
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Restore build caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            .grokauto-cache\pnpm-store
+            .grokauto-cache\cargo-home\registry
+            .grokauto-cache\cargo-home\git
+            .grokauto-cache\cargo-target
+            .grokauto-cache\electron
+            .grokauto-cache\electron-builder
+          key: grokauto-windows-release-v1
+
+      - name: Prepare cached toolchain dirs
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          foreach ($dir in @(
+            $env:GROKAUTO_CACHE_DIR,
+            $env:PNPM_STORE_DIR,
+            $env:CARGO_HOME,
+            $env:CARGO_TARGET_DIR,
+            $env:ELECTRON_CACHE,
+            $env:ELECTRON_BUILDER_CACHE
+          )) {
+            New-Item -ItemType Directory -Force $dir | Out-Null
+          }
+          node --version
+          if (Get-Command rustc -ErrorAction SilentlyContinue) {
+            rustc --version
+            cargo --version
+          } else {
+            Write-Host 'Rust is not preinstalled; GitLab job will install rustup.'
+          }
+
       - name: Install GitLab Runner
         shell: powershell
         run: |
@@ -89,7 +134,7 @@ jobs:
               --config $env:RUNNER_CONFIG `
               -r $runnerName `
               --max-builds 1 `
-              --wait-timeout 900
+              --wait-timeout 600
             if ($LASTEXITCODE -ne 0) {
               throw "GitLab Runner exited with code $LASTEXITCODE"
             }

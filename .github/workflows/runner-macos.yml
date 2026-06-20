@@ -27,7 +27,7 @@ jobs:
   runner-macos:
     if: ${{ github.event.inputs.source == 'gitlab-release' && github.event.inputs.pipeline_id != '' }}
     runs-on: macos-15
-    timeout-minutes: 75
+    timeout-minutes: 25
     env:
       GITLAB_URL: ${{ vars.GITLAB_URL }}
       GITLAB_RUNNER_TOKEN: ${{ secrets.GITLAB_RUNNER_TOKEN_MACOS }}
@@ -92,4 +92,4 @@ jobs:
             --config "$RUNNER_CONFIG" \
             -r "$runner_name" \
             --max-builds 1 \
-            --wait-timeout 900
+            --wait-timeout 600
