@@ -90,7 +90,7 @@ jobs:
           }
           trap cleanup EXIT INT TERM
 
-          gitlab-runner --log-level warn run-single \
+          gitlab-runner --log-level error run-single \
             --config "$RUNNER_CONFIG" \
             -r "$runner_name" \
             --max-builds 1 \

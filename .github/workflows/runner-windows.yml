@@ -114,6 +114,7 @@ jobs:
           $runnerName = "gh-windows-$env:GITHUB_RUN_ID"
           New-Item -ItemType Directory -Force "$env:RUNNER_DIR\work" | Out-Null
           $registerArgs = @(
+            '--log-level', 'error',
             'register',
             '--config', $env:RUNNER_CONFIG,
             '--non-interactive',
@@ -138,7 +139,7 @@ jobs:
           Set-Content -Path $env:RUNNER_CONFIG -Value $config -NoNewline
 
           try {
-            & $runner run-single `
+            & $runner --log-level error run-single `
               --config $env:RUNNER_CONFIG `
               -r $runnerName `
               --max-builds 1 `
@@ -147,5 +148,5 @@ jobs:
               throw "GitLab Runner exited with code $LASTEXITCODE"
             }
           } finally {
-            & $runner unregister --config $env:RUNNER_CONFIG --name $runnerName
+            & $runner --log-level error unregister --config $env:RUNNER_CONFIG --name $runnerName
           }
