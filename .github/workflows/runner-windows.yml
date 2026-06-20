@@ -58,7 +58,9 @@ jobs:
             .grokauto-cache\electron-builder
             .grokauto-cache\gitlab-runner\gitlab-runner.exe
             grokauto-src\native\target
-          key: grokauto-windows-release-v1
+          key: grokauto-windows-release-v2
+          restore-keys: |
+            grokauto-windows-release-v1
 
       - name: Prepare cached toolchain dirs
         shell: powershell
