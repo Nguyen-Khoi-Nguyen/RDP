@@ -1,5 +1,4 @@
-name: GitLab Runner Linux
-# Ephemeral GitLab release runner. Runs one GitLab job then exits.
+name: GitHub Native Linux Build
 
 on:
   workflow_dispatch:
@@ -10,88 +9,119 @@ on:
         type: string
       release_tag:
         description: GitLab release tag
-        required: false
+        required: true
         type: string
       pipeline_id:
         description: GitLab pipeline ID
-        required: false
+        required: true
         type: string
 
-run-name: GitLab Runner Linux ${{ github.event.inputs.release_tag || 'manual' }}
+run-name: Linux Build ${{ github.event.inputs.release_tag || 'manual' }}
 
 concurrency:
-  group: gitlab-runner-linux
+  group: github-native-linux-${{ github.event.inputs.release_tag || github.run_id }}
   cancel-in-progress: true
 
 jobs:
-  runner-linux:
+  build-linux:
     if: ${{ github.event.inputs.source == 'gitlab-release' && github.event.inputs.pipeline_id != '' }}
     runs-on: ubuntu-24.04
-    timeout-minutes: 75
+    timeout-minutes: 30
     env:
-      GITLAB_URL: ${{ vars.GITLAB_URL }}
-      GITLAB_RUNNER_TOKEN: ${{ secrets.GITLAB_RUNNER_TOKEN_LINUX }}
-      LOG_LEVEL: warn
-      RUNNER_CONFIG: /tmp/gitlab-runner-linux/config.toml
-      RUNNER_WORKDIR: /tmp/gitlab-runner-linux/work
-      DEFAULT_DOCKER_IMAGE: alpine:3.20
+      CI: "true"
+      NODE_ENV: production
+      PNPM_VERSION: 11.5.2
+      EG_TOOLS_REQUIRE_SPKI_PINS: "1"
+      TOOL_REQUIRE_SIGNED_RELEASE_MANIFEST: "1"
+      EG_TOOLS_API_BASE_URL: https://tool-api.snailtool.io.vn
+      EG_TOOLS_WEB_BASE_URL: https://snailtool.io.vn
+      EG_TOOLS_API_SPKI_PINS: ElGeQINyN61ot50DuLGy9fPH0FQPHNTdEWsat7zo7Ww=
+      ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
+      ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
+      CARGO_HOME: ${{ github.workspace }}/.cache/cargo
+      GH_TOKEN: ${{ secrets.GH_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      MANIFEST_PRIVATE_KEY_PEM: ${{ secrets.MANIFEST_PRIVATE_KEY_PEM }}
+      RELEASE_PRIVATE_KEY_PEM: ${{ secrets.RELEASE_PRIVATE_KEY_PEM }}
+      LEASE_PRIVATE_KEY_PEM: ${{ secrets.LEASE_PRIVATE_KEY_PEM }}
+      ENCRYPTION_PRIVATE_KEY_PEM: ${{ secrets.ENCRYPTION_PRIVATE_KEY_PEM }}
+      MANIFEST_PUBLIC_KEY_PEM: ${{ secrets.MANIFEST_PUBLIC_KEY_PEM }}
+      RELEASE_PUBLIC_KEY_PEM: ${{ secrets.RELEASE_PUBLIC_KEY_PEM }}
+      LEASE_PUBLIC_KEY_PEM: ${{ secrets.LEASE_PUBLIC_KEY_PEM }}
+      ENCRYPTION_PUBLIC_KEY_PEM: ${{ secrets.ENCRYPTION_PUBLIC_KEY_PEM }}
 
     steps:
-      - name: Install GitLab Runner
+      - name: Validate inputs
         run: |
           set -euo pipefail
-          sudo curl -fsSL \
-            "https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-linux-amd64" \
-            -o /usr/local/bin/gitlab-runner
-          sudo chmod +x /usr/local/bin/gitlab-runner
-          gitlab-runner --version
-          docker version
-
-      - name: Register and run one GitLab job
-        run: |
-          set -euo pipefail
-          if [ -z "${GITLAB_URL}" ]; then
-            echo "::error::Missing variable GITLAB_URL"
+          if [ -z "${{ secrets.GITLAB_REPOSITORY_URL }}" ]; then
+            echo "::error::Missing secret GITLAB_REPOSITORY_URL"
             exit 1
           fi
-          if [ -z "${GITLAB_RUNNER_TOKEN}" ]; then
-            echo "::error::Missing secret GITLAB_RUNNER_TOKEN_LINUX"
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::Missing secret GH_TOKEN"
             exit 1
           fi
 
-          runner_name="gh-linux-${GITHUB_RUN_ID}"
-          mkdir -p "$(dirname "$RUNNER_CONFIG")" "$RUNNER_WORKDIR"
-          gitlab-runner --log-level error register \
-            --config "$RUNNER_CONFIG" \
-            --non-interactive \
-            --url "$GITLAB_URL" \
-            --token "$GITLAB_RUNNER_TOKEN" \
-            --name "$runner_name" \
-            --executor "docker" \
-            --docker-image "$DEFAULT_DOCKER_IMAGE"
+      - name: Install system dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+            libgtk-3-0 libx11-xcb1 libxcb-dri3-0 libxss1 \
+            libpango-1.0-0 libatk1.0-0 libatk-bridge2.0-0 \
+            libgdk-pixbuf2.0-0 libglib2.0-0 libcairo2 \
+            libnss3 libnspr4 libasound2 libgbm1 xvfb xauth unzip curl git ca-certificates
 
-          python3 - "$RUNNER_CONFIG" <<'PY'
-          from pathlib import Path
-          import re
-          import sys
+      - name: Checkout GitLab source
+        run: |
+          set -euo pipefail
+          git clone --depth 1 --branch "${{ github.event.inputs.release_tag }}" "${{ secrets.GITLAB_REPOSITORY_URL }}" source
 
-          path = Path(sys.argv[1])
-          text = path.read_text()
-          text = re.sub(r"^concurrent = \d+", "concurrent = 1", text, count=1, flags=re.M)
-          if "request_concurrency" in text:
-              text = re.sub(r"request_concurrency = \d+", "request_concurrency = 1", text)
-          else:
-              text = text.replace("  executor =", "  request_concurrency = 1\n  executor =", 1)
-          path.write_text(text)
-          PY
+      - name: Setup Node
+        uses: actions/setup-node@v6.4.0
+        with:
+          node-version: 24
 
-          cleanup() {
-            gitlab-runner --log-level error unregister --config "$RUNNER_CONFIG" --name "$runner_name" || true
-          }
-          trap cleanup EXIT INT TERM
+      - name: Setup pnpm
+        working-directory: source
+        run: |
+          set -euo pipefail
+          corepack enable
+          corepack prepare pnpm@${PNPM_VERSION} --activate
+          pnpm config set store-dir "$GITHUB_WORKSPACE/.cache/pnpm-store"
 
-          gitlab-runner --log-level error run-single \
-            --config "$RUNNER_CONFIG" \
-            -r "$runner_name" \
-            --max-builds 1 \
-            --wait-timeout 900
+      - name: Restore build caches
+        uses: actions/cache@v5.0.5
+        with:
+          path: |
+            .cache/pnpm-store
+            .cache/cargo
+            .cache/electron
+            .cache/electron-builder
+            source/native/target
+          key: grokauto-linux-${{ runner.os }}-${{ hashFiles('source/pnpm-lock.yaml', 'source/native/Cargo.lock') }}
+          restore-keys: |
+            grokauto-linux-${{ runner.os }}-
+
+      - name: Build Linux release
+        working-directory: source
+        run: |
+          set -euo pipefail
+          RELEASE_VERSION="${{ github.event.inputs.release_tag }}"
+          RELEASE_VERSION="${RELEASE_VERSION#v}"
+          rm -rf node_modules dist release
+          pnpm install --frozen-lockfile
+          node scripts/restore-build-keys.js
+          pnpm setup:keys
+          node scripts/build.js linux --version "$RELEASE_VERSION" --publish
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: grokauto-linux-${{ github.event.inputs.release_tag }}
+          if-no-files-found: error
+          retention-days: 14
+          path: |
+            source/release/GrokAutomation-*-amd64.deb
+            source/release/latest-linux.yml
