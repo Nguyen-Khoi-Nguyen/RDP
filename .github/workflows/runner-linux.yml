@@ -119,7 +119,7 @@ jobs:
           pnpm install --frozen-lockfile
           node scripts/restore-build-keys.js
           pnpm setup:keys
-          node scripts/build.js linux --version "$RELEASE_VERSION"
+          node scripts/build.js linux --version "$RELEASE_VERSION" --release-artifact
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
