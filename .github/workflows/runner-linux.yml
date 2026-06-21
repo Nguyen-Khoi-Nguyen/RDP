@@ -78,7 +78,8 @@ jobs:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
         run: |
           set -euo pipefail
-          git -c http.extraHeader="PRIVATE-TOKEN: ${GITLAB_TOKEN}" \
+          auth_header="$(printf 'oauth2:%s' "${GITLAB_TOKEN}" | base64 -w0)"
+          git -c http.extraHeader="Authorization: Basic ${auth_header}" \
             clone --depth 1 --branch "${{ github.event.inputs.release_tag }}" \
             https://gitlab.com/dongochoan97/grokauto.git source
 
