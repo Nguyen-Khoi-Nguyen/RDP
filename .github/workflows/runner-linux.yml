@@ -54,8 +54,8 @@ jobs:
       - name: Validate inputs
         run: |
           set -euo pipefail
-          if [ -z "${{ secrets.GITLAB_TOKEN }}" ]; then
-            echo "::error::Missing secret GITLAB_TOKEN"
+          if [ -z "${{ secrets.GITLAB_TOKEN_B64 }}" ]; then
+            echo "::error::Missing secret GITLAB_TOKEN_B64"
             exit 1
           fi
           if [ -z "${GH_TOKEN}" ]; then
@@ -75,9 +75,11 @@ jobs:
 
       - name: Checkout GitLab source
         env:
-          GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
+          GITLAB_TOKEN_B64: ${{ secrets.GITLAB_TOKEN_B64 }}
         run: |
           set -euo pipefail
+          GITLAB_TOKEN="$(printf '%s' "$GITLAB_TOKEN_B64" | base64 -d)"
+          export GITLAB_TOKEN
           askpass="$(mktemp)"
           cat > "$askpass" <<'EOF'
           #!/usr/bin/env bash
