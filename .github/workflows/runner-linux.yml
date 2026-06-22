@@ -78,13 +78,19 @@ jobs:
           GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
         run: |
           set -euo pipefail
-          git config --global credential.https://gitlab.com.username oauth2
-          git config --global credential.https://gitlab.com.helper \
-            "!f() { echo password=${GITLAB_TOKEN}; }; f"
+          askpass="$(mktemp)"
+          cat > "$askpass" <<'EOF'
+          #!/usr/bin/env bash
+          case "$1" in
+            *Username*) printf '%s\n' oauth2 ;;
+            *Password*) printf '%s\n' "$GITLAB_TOKEN" ;;
+          esac
+          EOF
+          chmod 700 "$askpass"
+          export GIT_ASKPASS="$askpass"
           git clone --depth 1 --branch "${{ github.event.inputs.release_tag }}" \
             https://gitlab.com/dongochoan97/grokauto.git source
-          git config --global --unset credential.https://gitlab.com.helper || true
-          git config --global --unset credential.https://gitlab.com.username || true
+          rm -f "$askpass"
 
       - name: Setup Node
         uses: actions/setup-node@v6.4.0
