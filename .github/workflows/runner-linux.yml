@@ -98,6 +98,8 @@ jobs:
         uses: actions/setup-node@v6.4.0
         with:
           node-version: 24
+          cache: pnpm
+          cache-dependency-path: source/pnpm-lock.yaml
 
       - name: Setup pnpm
         working-directory: source
@@ -127,7 +129,7 @@ jobs:
           RELEASE_VERSION="${{ github.event.inputs.release_tag }}"
           RELEASE_VERSION="${RELEASE_VERSION#v}"
           rm -rf node_modules dist release
-          pnpm install --frozen-lockfile
+          pnpm install --frozen-lockfile --prefer-offline
           node scripts/restore-build-keys.js
           pnpm setup:keys
           node scripts/build.js linux --version "$RELEASE_VERSION" --release-artifact
