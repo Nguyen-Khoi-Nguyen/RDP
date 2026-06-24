@@ -16,7 +16,7 @@ on:
         required: true
         type: string
 
-run-name: Linux Build ${{ github.event.inputs.release_tag || 'manual' }}
+run-name: "Linux Build ${{ github.event.inputs.release_tag || 'manual' }} #${{ github.event.inputs.pipeline_id || 'manual' }}"
 
 concurrency:
   group: github-native-linux-${{ github.event.inputs.release_tag || github.run_id }}
@@ -137,7 +137,7 @@ jobs:
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
         with:
-          name: grokauto-linux-${{ github.event.inputs.release_tag }}
+          name: grokauto-linux-${{ github.event.inputs.pipeline_id }}
           if-no-files-found: error
           retention-days: 14
           path: |

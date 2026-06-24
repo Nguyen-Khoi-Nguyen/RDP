@@ -17,7 +17,7 @@ on:
         required: false
         type: string
 
-run-name: GitLab Runner macOS ${{ github.event.inputs.release_tag || 'manual' }}
+run-name: "GitLab Runner macOS ${{ github.event.inputs.release_tag || 'manual' }} #${{ github.event.inputs.pipeline_id || 'manual' }}"
 
 concurrency:
   group: gitlab-runner-macos
