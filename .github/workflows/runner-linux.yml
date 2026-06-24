@@ -54,10 +54,6 @@ jobs:
       - name: Validate inputs
         run: |
           set -euo pipefail
-          if [ -z "${{ secrets.GITLAB_TOKEN_B64 }}" ]; then
-            echo "::error::Missing secret GITLAB_TOKEN_B64"
-            exit 1
-          fi
           if [ -z "${GH_TOKEN}" ]; then
             echo "::error::Missing secret GH_TOKEN"
             exit 1
@@ -74,25 +70,10 @@ jobs:
             libnss3 libnspr4 libasound2t64 libgbm1 xvfb xauth unzip curl git ca-certificates
 
       - name: Checkout GitLab source
-        env:
-          GITLAB_TOKEN_B64: ${{ secrets.GITLAB_TOKEN_B64 }}
         run: |
           set -euo pipefail
-          GITLAB_TOKEN="$(printf '%s' "$GITLAB_TOKEN_B64" | base64 -d)"
-          export GITLAB_TOKEN
-          askpass="$(mktemp)"
-          cat > "$askpass" <<'EOF'
-          #!/usr/bin/env bash
-          case "$1" in
-            *Username*) printf '%s\n' oauth2 ;;
-            *Password*) printf '%s\n' "$GITLAB_TOKEN" ;;
-          esac
-          EOF
-          chmod 700 "$askpass"
-          export GIT_ASKPASS="$askpass"
           git clone --depth 1 --branch "${{ github.event.inputs.release_tag }}" \
             https://gitlab.com/dongochoan97/grokauto.git source
-          rm -f "$askpass"
 
       - name: Setup Node
         uses: actions/setup-node@v6.4.0
