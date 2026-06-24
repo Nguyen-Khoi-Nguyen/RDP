@@ -41,6 +41,7 @@ jobs:
       CARGO_HOME: ${{ github.workspace }}/.cache/cargo
       GH_TOKEN: ${{ secrets.GH_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GH_TOKEN }}
+      GITLAB_TOKEN: ${{ secrets.GITLAB_TOKEN }}
       MANIFEST_PRIVATE_KEY_PEM: ${{ secrets.MANIFEST_PRIVATE_KEY_PEM }}
       RELEASE_PRIVATE_KEY_PEM: ${{ secrets.RELEASE_PRIVATE_KEY_PEM }}
       LEASE_PRIVATE_KEY_PEM: ${{ secrets.LEASE_PRIVATE_KEY_PEM }}
@@ -58,6 +59,10 @@ jobs:
             echo "::error::Missing secret GH_TOKEN"
             exit 1
           fi
+          if [ -z "${GITLAB_TOKEN}" ]; then
+            echo "::error::Missing secret GITLAB_TOKEN"
+            exit 1
+          fi
 
       - name: Install system dependencies
         run: |
@@ -73,7 +78,7 @@ jobs:
         run: |
           set -euo pipefail
           git clone --depth 1 --branch "${{ github.event.inputs.release_tag }}" \
-            https://gitlab.com/dongochoan97/grokauto.git source
+            "https://oauth2:${GITLAB_TOKEN}@gitlab.com/dongochoan97/grokauto.git" source
 
       - name: Setup Node
         uses: actions/setup-node@v6.4.0
