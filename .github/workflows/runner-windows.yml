@@ -142,8 +142,8 @@ jobs:
             & $runner --log-level error run-single `
               --config $env:RUNNER_CONFIG `
               -r $runnerName `
-              --max-builds 1 `
-              --wait-timeout 600
+            --max-builds 1 `
+            --wait-timeout 120
             if ($LASTEXITCODE -ne 0) {
               throw "GitLab Runner exited with code $LASTEXITCODE"
             }

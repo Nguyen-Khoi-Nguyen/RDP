@@ -92,4 +92,4 @@ jobs:
             --config "$RUNNER_CONFIG" \
             -r "$runner_name" \
             --max-builds 1 \
-            --wait-timeout 600
+            --wait-timeout 120
