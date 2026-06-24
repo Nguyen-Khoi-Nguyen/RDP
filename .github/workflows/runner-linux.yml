@@ -86,8 +86,6 @@ jobs:
         uses: actions/setup-node@v6.4.0
         with:
           node-version: 24
-          cache: pnpm
-          cache-dependency-path: source/pnpm-lock.yaml
 
       - name: Setup pnpm
         working-directory: source
