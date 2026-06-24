@@ -55,11 +55,12 @@ jobs:
       - name: Validate inputs
         run: |
           set -euo pipefail
+          GITLAB_TOKEN_CLEAN="$(printf '%s' "${GITLAB_TOKEN}" | tr -d '\r\n[:space:]')"
           if [ -z "${GH_TOKEN}" ]; then
             echo "::error::Missing secret GH_TOKEN"
             exit 1
           fi
-          if [ -z "${GITLAB_TOKEN}" ]; then
+          if [ -z "${GITLAB_TOKEN_CLEAN}" ]; then
             echo "::error::Missing secret GITLAB_TOKEN"
             exit 1
           fi
@@ -77,8 +78,9 @@ jobs:
       - name: Checkout GitLab source
         run: |
           set -euo pipefail
+          GITLAB_TOKEN_CLEAN="$(printf '%s' "${GITLAB_TOKEN}" | tr -d '\r\n[:space:]')"
           git clone --depth 1 --branch "${{ github.event.inputs.release_tag }}" \
-            "https://oauth2:${GITLAB_TOKEN}@gitlab.com/dongochoan97/grokauto.git" source
+            "https://oauth2:${GITLAB_TOKEN_CLEAN}@gitlab.com/dongochoan97/grokauto.git" source
 
       - name: Setup Node
         uses: actions/setup-node@v6.4.0
