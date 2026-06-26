@@ -59,8 +59,9 @@ jobs:
             ${{ github.workspace }}\.grokauto-cache\electron
             ${{ github.workspace }}\.grokauto-cache\electron-builder
             ${{ github.workspace }}\.grokauto-cache\gitlab-runner\gitlab-runner.exe
-          key: grokauto-windows-release-v3
+          key: grokauto-windows-release-v4
           restore-keys: |
+            grokauto-windows-release-v3
             grokauto-windows-release-v2
             grokauto-windows-release-v1
 
@@ -95,9 +96,12 @@ jobs:
           $cachedRunner = Join-Path $env:GROKAUTO_CACHE_DIR 'gitlab-runner\gitlab-runner.exe'
           New-Item -ItemType Directory -Force (Split-Path -Parent $cachedRunner) | Out-Null
           if (-not (Test-Path -LiteralPath $cachedRunner)) {
-            Invoke-WebRequest `
+            & curl.exe -fL --retry 4 --retry-delay 3 --connect-timeout 20 `
               "https://gitlab-runner-downloads.s3.amazonaws.com/latest/binaries/gitlab-runner-windows-amd64.exe" `
-              -OutFile $cachedRunner
+              -o $cachedRunner
+            if ($LASTEXITCODE -ne 0) {
+              throw "Failed to download GitLab Runner with exit code $LASTEXITCODE"
+            }
           }
           Copy-Item -LiteralPath $cachedRunner -Destination "$env:RUNNER_DIR\gitlab-runner.exe" -Force
           & "$env:RUNNER_DIR\gitlab-runner.exe" --version
