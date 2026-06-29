@@ -31,7 +31,7 @@ jobs:
     env:
       CI: "true"
       NODE_ENV: production
-      PNPM_VERSION: 11.5.2
+      PNPM_VERSION: 11.9.0
       EG_TOOLS_REQUIRE_SPKI_PINS: "1"
       TOOL_REQUIRE_SIGNED_RELEASE_MANIFEST: "1"
       EG_TOOLS_API_BASE_URL: https://tool-api.snailtool.io.vn
