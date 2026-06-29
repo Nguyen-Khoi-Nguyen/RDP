@@ -1,5 +1,6 @@
 name: GitLab Runner macOS
 # Ephemeral GitLab release runner. Runs one GitLab job then exits.
+# Indexed after repository migration.
 
 on:
   workflow_dispatch:
