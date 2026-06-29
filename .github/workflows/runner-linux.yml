@@ -120,7 +120,7 @@ jobs:
           pnpm install --frozen-lockfile --prefer-offline
           node scripts/restore-build-keys.js
           pnpm setup:keys
-          node scripts/build.js linux --version "$RELEASE_VERSION" --release-artifact
+          node scripts/build.js linux --version "$RELEASE_VERSION" --release-artifact --skip-dedupe
 
       - name: Upload Linux artifact
         uses: actions/upload-artifact@v4
@@ -128,6 +128,7 @@ jobs:
           name: grokauto-linux-${{ github.event.inputs.pipeline_id }}
           if-no-files-found: error
           retention-days: 14
+          compression-level: 0
           path: |
             source/release/GrokAutomation-*-amd64.deb
             source/release/latest-linux.yml
