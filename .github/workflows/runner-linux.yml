@@ -16,6 +16,18 @@ on:
         description: GitLab pipeline ID
         required: true
         type: string
+      sentry_dsn:
+        description: Public Sentry DSN for desktop builds
+        required: false
+        type: string
+      sentry_release:
+        description: Sentry release name
+        required: false
+        type: string
+      sentry_environment:
+        description: Sentry environment name
+        required: false
+        type: string
 
 run-name: "Linux Build ${{ github.event.inputs.release_tag || 'manual' }} #${{ github.event.inputs.pipeline_id || 'manual' }}"
 
@@ -37,6 +49,9 @@ jobs:
       EG_TOOLS_API_BASE_URL: https://tool-api.snailtool.io.vn
       EG_TOOLS_WEB_BASE_URL: https://snailtool.io.vn
       EG_TOOLS_API_SPKI_PINS: ElGeQINyN61ot50DuLGy9fPH0FQPHNTdEWsat7zo7Ww=
+      SENTRY_DSN: ${{ github.event.inputs.sentry_dsn }}
+      SENTRY_RELEASE: ${{ github.event.inputs.sentry_release }}
+      SENTRY_ENVIRONMENT: ${{ github.event.inputs.sentry_environment || 'production' }}
       ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
       ELECTRON_BUILDER_CACHE: ${{ github.workspace }}/.cache/electron-builder
       CARGO_HOME: ${{ github.workspace }}/.cache/cargo
